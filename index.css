@@ -1,0 +1,49 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px; /* Adjust as needed */
+}
+
+body {
+  line-height: 1.5;
+  font-family: Arial, sans-serif; /* Adjust font-family as needed */
+}
+
+/* Remove default list styles */
+ul,
+ol {
+  list-style: none;
+}
+
+/* Remove default hyperlink styles */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Remove default button styles */
+button {
+  border: none;
+  outline: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* Optionally, you can add more styles as needed */
+
+body {
+  height: 100vh;
+  width: 100%;
+  background-color: #181818;
+}
+
+#game {
+  height: 100%;
+  width: 100%;
+}
