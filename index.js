@@ -1,6 +1,6 @@
 import { Color } from './color.js';
 
-const canvas                 = document.getElementById("game");
+const canvas                 = document.getElementById("canvas");
 const context                = canvas.getContext("2d");
 canvas.height                = window.innerHeight;
 canvas.width                 = window.innerWidth;
@@ -35,13 +35,23 @@ const tutState = Object.freeze({
 });
 
 const tutMessages = ["Use W A S D to move around", 
-                     "Left click to shoot in a particular direction",
-                     ""];
+"Left click to shoot in a particular direction",
+""];
+
+function grayScaleFiler(color) {
+  return color.grayScale();
+} 
+
+function idColor(color) {
+  return color;
+}
+
+let globalCircleFilter = idColor;
 
 function fillCircle(context, center, radius, color = "green") {
   context.beginPath();
   context.arc(center.x, center.y, radius, 0, 2 * Math.PI, false);
-  context.fillStyle = color;
+  context.fillStyle = globalCircleFilter(color).to_rgbaString();
   context.fill();
 }
 
@@ -97,20 +107,7 @@ class Particles {
 
   render(context) {
     const a = this.lifetime / PARTICLE_LIFETIME;
-    fillCircle(context, this.pos, this.radius, PARTICLE_COLOR.withAlpha(a).to_rgbaString());
-    // const gradient = context.createRadialGradient(this.pos.x, this.pos.y, 0, this.pos.x, this.pos.y, this.radius + 5);
-
-    // // Outer color with lower opacity
-    // gradient.addColorStop(0, PARTICLE_GLOW.withAlpha(a * 0.5).to_rgbaString());
-    // // Middle color with medium opacity
-    // gradient.addColorStop(0.5, PARTICLE_GLOW.withAlpha(a * 0.3).to_rgbaString());
-    // // Inner color with higher opacity
-    // gradient.addColorStop(1, PARTICLE_GLOW.withAlpha(a * 0.1).to_rgbaString());
-    
-    // context.fillStyle = gradient;
-    // context.beginPath();
-    // context.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
-    // context.fill();
+    fillCircle(context, this.pos, this.radius, PARTICLE_COLOR.withAlpha(a));
   } 
 };
 
@@ -140,7 +137,7 @@ class Enemy {
   }
 
   render(context) {
-    fillCircle(context, this.pos, ENEMY_RADIUS, ENEMY_COLOR.to_rgbaString())
+    fillCircle(context, this.pos, ENEMY_RADIUS, ENEMY_COLOR)
   }
 }
 
@@ -157,7 +154,7 @@ class Bullet {
   }
 
   render(context) {
-    fillCircle(context, this.pos, BULLET_RADIUS, BULLET_COLOR.to_rgbaString())
+    fillCircle(context, this.pos, BULLET_RADIUS, BULLET_COLOR)
   }
 
 };
@@ -186,15 +183,14 @@ class Game {
   particles             = [];
   enemySpawnRate        = ENEMY_SPAWN_COOLDOWN;
   enemySpawnCooldown    = this.enemySpawnRate;
-  pause                 = true;
+  pause                 = false;
 
   constructor() {
     
   }
 
   update(dt) {
-
-    if (!this.pause) {
+    if (this.pause) {
       return ;
     }
 
@@ -251,7 +247,7 @@ class Game {
     const height = context.canvas.height;
 
     context.clearRect(0, 0, width, height);
-    fillCircle(context, this.playerPos, PLAYER_RADIUS, PLAYER_COLOR.to_rgbaString());
+    fillCircle(context, this.playerPos, PLAYER_RADIUS, PLAYER_COLOR);
     
     renderSomething(context, this.bullets);
     renderSomething(context, this.particles);
@@ -265,10 +261,14 @@ class Game {
   }
 
   togglePause() {
-    if (this.pause == true)
-      this.pause = false;
-    else
-      this.pause = true;
+    this.pause = !this.pause;
+
+    if (this.pause) {
+      globalCircleFilter = grayScaleFiler;
+    }
+    else {
+      globalCircleFilter = idColor;
+    }
   }
 
   keyDown(event) {

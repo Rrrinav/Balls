@@ -28,4 +28,9 @@ export class Color {
     withAlpha(a) {
         return new Color (this.r, this.g, this.b, a);
     }
+
+    grayScale() {
+        const grayValue = (this.r + this.g + this.b) / 3;
+        return new Color (grayValue, grayValue, grayValue, this.a)
+    }
 }
