@@ -5,12 +5,11 @@ const canvas                = document.getElementById("canvas");
 const context               = canvas.getContext("2d");
 canvas.height               = window.innerHeight;
 canvas.width                = window.innerWidth;
-const width                 = canvas.width;
-const height                = canvas.height;
 const PLAYER_RADIUS         = 50;
-const PLAYER_SPEED          = 1000; // Define the speed
+const PLAYER_SPEED          = 800; // Define the speed
 const PLAYER_MAX_HEALTH     = 100;
 const PLAYER_COLOR          = Color.hex("#D20062");
+const PLAYER_TRAIL_COLOR    = Color.hex("#d200a2")
 const KILL_HEAL             = PLAYER_MAX_HEALTH / 10; //10
 const KILL_SCORE            = 20;
 const BULLET_SPEED          = 2500;
@@ -21,6 +20,8 @@ const ENEMY_SPEED           = PLAYER_SPEED / 3;
 const ENEMY_RADIUS          = PLAYER_RADIUS / 1.5;
 const ENEMY_DAMAGE          = PLAYER_MAX_HEALTH / 5; //20
 const ENEMY_COLOR           = Color.hex("#FFEBB2");
+const ENEMY_TRAIL_COLOR     = Color.hex("#FFaf4f")
+const ENEMY_FADEOUT         = 2.0;
 const ENEMY_SPAWN_COOLDOWN  = 2; //2
 const ENEMY_SPAWN_DISTANCE  = 800; //800
 const PARTICLE_RADIUS       = 8;
@@ -33,6 +34,8 @@ const HEALTH_BAR_HEIGHT     = 10;
 const HEALTH_BAR_COLOR      = Color.hex("#ff9900");
 const DEAD_MESS_COLOR       = Color.hex("#5fcfff")
 let windowResized           = false;
+const PLAYER_FADEOUT        = 2.0;
+const TRAIL_COOLDOWN        = 1 / 13;
 
 const tutState = Object.freeze({
   "learningMovement": 0,
@@ -58,12 +61,30 @@ class Camera {
   }
 
   update(dt) {
-      
+    this.pos = this.pos.add(this.vel.scale(dt));
+  }
+
+  setTarget(target) {
+    this.vel = target.subtract(this.pos).scale(2);
   }
 
   width() { return this.context.canvas.width; }
 
   height() { return this.context.canvas.height; }
+
+  toScreen(point) {
+    const width = this.context.canvas.width;
+    const height = this.context.canvas.height;
+
+    return point.subtract(this.pos).add(new V2(width / 2, height / 2));
+  }
+
+  toWorld(point) {
+    const width = this.context.canvas.width;
+    const height = this.context.canvas.height;
+
+    return point.subtract(new V2(width / 2, height / 2)).add(this.pos);
+  }
 
   clear() {
     const width = this.context.canvas.width;
@@ -73,7 +94,7 @@ class Camera {
   }
 
   fillCircle(center, radius, color = "green") {
-    let viewCenter = center.subtract(this.pos);
+    const viewCenter = this.toScreen(center);
 
     this.context.fillStyle = color.grayScale(this.grayness).to_rgbaString();
     this.context.beginPath();
@@ -82,10 +103,16 @@ class Camera {
   }
 
   fillRect(x, y, w, h, color) {
-    let viewPos = new V2(x, y).subtract(this.pos); 
+    if( color != HEALTH_BAR_COLOR) {
+    let viewPos = this.toScreen(new V2(x, y)); 
 
     this.context.fillStyle = color.to_rgbaString();
     this.context.fillRect(viewPos.x, viewPos.y, w, h);
+    }
+    else {
+      this.context.fillStyle = color.to_rgbaString();
+      this.context.fillRect(x, y, w, h);
+    }
   }
 
   fillMessage(text, color) {
@@ -106,6 +133,16 @@ class Camera {
     this.context.font = "50px VT323";
     this.context.textAlign = "center";
     this.context.fillText(text, width / 2, height / 2 + 50);
+  }
+
+  showScore(text, color) {
+    const width = this.context.canvas.width;
+    const height = this.context.canvas.height;
+  
+    this.context.fillStyle = color.to_rgbaString();
+    this.context.font = "30px VT323";
+    this.context.textAlign = "start";
+    this.context.fillText(text, 20, 60);
   }
 }
 
@@ -147,18 +184,22 @@ function particleBurst(particles, center, color) {
 
 class Player {
   health = PLAYER_MAX_HEALTH;
+  trail = new Trail (PLAYER_RADIUS, PLAYER_TRAIL_COLOR, 15, PLAYER_FADEOUT);
   constructor(pos) {
     this.pos = pos;
   }
 
   render(camera) {
     if (this.health > 0.0) {
+      this.trail.render(camera);  
       camera.fillCircle(this.pos, PLAYER_RADIUS, PLAYER_COLOR)
     }
   }
 
   update(dt, vel) {
+    this.trail.push(this.pos);
     this.pos = this.pos.add(vel.scale(dt));
+    this.trail.update(dt);
   }
 
   shootAt(target) {
@@ -175,10 +216,50 @@ class Player {
   heal(value) {
     this.health = Math.min(this.health + value, PLAYER_MAX_HEALTH);
   }
-}
+};
+
+class Trail {
+  trail = [];
+  cooldown = 0.0;
+  disable = false;
+
+  constructor(radius, color, limit, rate) {
+    this.color = color;
+    this.radius = radius;
+    this.limit = limit;
+    this.rate = rate;
+  }
+
+  render(camera) {
+    const n = this.trail.length;    
+    for (let i = 0; i < n; ++i) { 
+      camera.fillCircle(this.trail[i].pos, this.radius * (i / n) > this.limit ? this.radius * (i / n) : 0 , this.color.withAlpha(this.trail[i].a));
+    }
+  }
+
+  update(dt) {
+    for (let dot of this.trail) {
+      dot.a -= this.rate * dt;
+    }
+
+    while( this.trail.length > 0 && this.trail[0].a <= 0) {
+      this.trail.shift();
+    }
+
+    this.cooldown -= dt;
+  }
+
+  push(pos) {
+    if (!this.disable && this.cooldown <= 0.0) {
+      this.trail.push({pos: pos, a: 0.7});
+      this.cooldown = TRAIL_COOLDOWN;
+    }
+  }
+};  
 
 
 class Enemy {
+  trail = new Trail(ENEMY_RADIUS, ENEMY_TRAIL_COLOR, 1 , ENEMY_FADEOUT);
   constructor(pos) {
     this.pos = pos;
     this.dead = false;
@@ -186,15 +267,17 @@ class Enemy {
 
   update(dt, targetPos) {
     let vel = targetPos
-      .subtract(this.pos)
-      .normalize()
-      .scale(ENEMY_SPEED * dt);
-
+    .subtract(this.pos)
+    .normalize()
+    .scale(ENEMY_SPEED * dt);
+    this.trail.push(this.pos);
     this.pos = this.pos.add(vel);
+    this.trail.update(dt);
   }
 
   render(camera) {
-    camera.fillCircle(this.pos, ENEMY_RADIUS, ENEMY_COLOR)
+    this.trail.render(camera);
+    camera.fillCircle(this.pos, ENEMY_RADIUS, ENEMY_COLOR);
   }
 }
 
@@ -224,7 +307,7 @@ const directionMap = {
 };
 
 class Game {
-  player = new Player(new V2(PLAYER_RADIUS + 10, PLAYER_RADIUS + 10))
+  player = new Player(new V2(0, 0))
   score = 0.0;
   mousePos = new V2(0, 0);
   pressedKeys = new Set();
@@ -254,8 +337,10 @@ class Game {
       dt = dt / 50;
     }
 
-    let velocity = new V2(0, 0);
+    this.camera.setTarget(this.player.pos);
+    this.camera.update(dt);
 
+    let velocity = new V2(0, 0);
     for (let key of this.pressedKeys) {
       if (key in directionMap) {
         velocity = velocity.add(directionMap[key].scale(PLAYER_SPEED));
@@ -274,6 +359,11 @@ class Game {
             bullet.lifetime = 0.0;
             particleBurst(this.particles, enemy.pos, ENEMY_COLOR);
           }
+        }
+      }
+      if (this.player.health <= 0.0 ) {
+        for (let enemy of this.enemies) {
+          enemy.trail.disable = true;
         }
       }
       if (this.player.health > 0.0 && !enemy.dead) {
@@ -320,10 +410,8 @@ class Game {
   
 
   render() {
-    if (windowResized) {
       const width = this.camera.width();
       const height = this.camera.height();
-    }
 
     this.camera.clear();
     this.player.render(this.camera);
@@ -333,6 +421,7 @@ class Game {
     this.renderSomething(this.enemies);
 
     this.camera.fillRect(0 + 20, 0 + 20, (width / 4) * (this.player.health / PLAYER_MAX_HEALTH), HEALTH_BAR_HEIGHT, HEALTH_BAR_COLOR);
+    this.camera.showScore(`Score: ${this.score}`, MESSAGE_COLOR)
 
     if (this.pause) { this.camera.fillMessage("PAUSED: Press <Space> to unpause", MESSAGE_COLOR); }
 
@@ -380,8 +469,8 @@ class Game {
   mouseDown(event) {
     if (this.pause || this.player.health <= 0.0) { return; }
     else {
-      this.player.shootAt(new V2(event.clientX, event.clientY))
-      this.bullets.push(this.player.shootAt(new V2(event.clientX, event.clientY)));
+      const mousePos = new V2(event.clientX, event.clientY);
+      this.bullets.push(this.player.shootAt(this.camera.toWorld(mousePos)));
       this.tutorial.playerShot();
     }
   }
