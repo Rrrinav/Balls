@@ -1,38 +1,38 @@
 import { Color } from './color.js';
 import { V2 } from './v2.js';
 
-
-const canvas = document.getElementById("canvas");
-const context = canvas.getContext("2d");
-canvas.height = window.innerHeight;
-canvas.width = window.innerWidth;
-const width = canvas.width;
-const height = canvas.height;
-const PLAYER_RADIUS = 50;
-const PLAYER_SPEED = 1000; // Define the speed
-const PLAYER_MAX_HEALTH = 100;
-const PLAYER_COLOR = Color.hex("#D20062");
-const BULLET_SPEED = 2500;
-const BULLET_RADIUS = 15;
-const BULLET_LIFETIME = 2.0;
-const BULLET_COLOR = Color.hex("#E0E0E0");
-const ENEMY_SPEED = PLAYER_SPEED / 3;
-const ENEMY_RADIUS = PLAYER_RADIUS / 1.5;
-const ENEMY_DAMAGE = PLAYER_MAX_HEALTH / 2; //5 
-const ENEMY_COLOR = Color.hex("#FFEBB2");
-const ENEMY_SPAWN_COOLDOWN = 0.01; //2
-const ENEMY_SPAWN_DISTANCE = 800; //800
-const PARTICLE_RADIUS = 8;
-const PARTICLE_COUNT = 50;
-const PARTICLE_MAG = BULLET_SPEED / 4;
-const PARTICLE_LIFETIME = 0.7;
-let windowResized = false;
-const MESSAGE_COLOR = Color.hex("#ffffff");
-const POPUP_SPEED = 1.7;
-const HEALTH_BAR_HEIGHT = 10;
-const HEALTH_BAR_COLOR = Color.hex("#ff9900");
-const DEAD_MESS_COLOR = Color.hex("#5fcfff")
-
+const canvas                = document.getElementById("canvas");
+const context               = canvas.getContext("2d");
+canvas.height               = window.innerHeight;
+canvas.width                = window.innerWidth;
+const width                 = canvas.width;
+const height                = canvas.height;
+const PLAYER_RADIUS         = 50;
+const PLAYER_SPEED          = 1000; // Define the speed
+const PLAYER_MAX_HEALTH     = 100;
+const PLAYER_COLOR          = Color.hex("#D20062");
+const KILL_HEAL             = PLAYER_MAX_HEALTH / 10; //10
+const BULLET_SPEED          = 2500;
+const BULLET_RADIUS         = 15;
+const BULLET_LIFETIME       = 2.0;
+const BULLET_COLOR          = Color.hex("#E0E0E0");
+const ENEMY_SPEED           = PLAYER_SPEED / 3;
+const ENEMY_RADIUS          = PLAYER_RADIUS / 1.5;
+const ENEMY_DAMAGE          = PLAYER_MAX_HEALTH / 5; //20
+const ENEMY_COLOR           = Color.hex("#FFEBB2");
+const ENEMY_SPAWN_COOLDOWN  = 2; //2
+const ENEMY_SPAWN_DISTANCE  = 800; //800
+const PARTICLE_RADIUS       = 8;
+const PARTICLE_COUNT        = 50;
+const PARTICLE_MAG         = BULLET_SPEED / 4;
+const PARTICLE_LIFETIME     = 0.7;
+const MESSAGE_COLOR         = Color.hex("#ffffff");
+const POPUP_SPEED           = 1.7;
+const HEALTH_BAR_HEIGHT     = 10;
+const HEALTH_BAR_COLOR      = Color.hex("#ff9900");
+const DEAD_MESS_COLOR       = Color.hex("#5fcfff")
+let windowResized           = false;
+let globalGreyness          = 0.0;
 
 const tutState = Object.freeze({
   "learningMovement": 0,
@@ -44,18 +44,12 @@ const tutMessages = ["Use W A S D to move around",
   "Left click to shoot in a particular direction",
   ""];
 
-function grayScaleFiler(color) {
-  return color.grayScale();
+function Random(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-
-function idColor(color) {
-  return color;
-}
-
-let globalFillFilter = idColor;
 
 function fillCircle(context, center, radius, color = "green") {
-  context.fillStyle = globalFillFilter(color).to_rgbaString();
+  context.fillStyle = color.grayScale(globalGreyness).to_rgbaString();
   context.beginPath();
   context.arc(center.x, center.y, radius, 0, 2 * Math.PI, false);
   context.fill();
@@ -101,13 +95,13 @@ class Particles {
 };
 
 function particleBurst(particles, center, color) {
-  const n = (Math.random() * (1 + PARTICLE_COUNT - 4)) + 4;
+  const n = Random(20, PARTICLE_COUNT);
   for (let i = 0; i < n; ++i) {
     particles.push(new Particles(center,
-      polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI),
-      PARTICLE_LIFETIME,
-      Math.random() * PARTICLE_RADIUS,
-      color));
+                                 polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI),
+                                 PARTICLE_LIFETIME,
+                                 Math.random() * PARTICLE_RADIUS,
+                                 color));
   }
 }
 
@@ -136,6 +130,10 @@ class Player {
 
   damage(value) {
     this.health = Math.max(this.health - value, 0.0)
+  }
+
+  heal(value) {
+    this.health = Math.min(this.health + value, PLAYER_MAX_HEALTH);
   }
 }
 
@@ -210,9 +208,14 @@ class Game {
 
   update(dt) {
     if (this.pause) {
+      globalGreyness = 1.0;
       return;
     }
-    else if (this.player.health <= 0.0) {
+    else {
+      globalGreyness = 1.0 - this.player.health / PLAYER_MAX_HEALTH;
+    }
+    
+    if (this.player.health <= 0.0) {
       dt = dt / 50;
     }
 
@@ -230,6 +233,7 @@ class Game {
       if (!enemy.dead) {
         for (let bullet of this.bullets) {
           if (enemy.pos.distance(bullet.pos) <= ENEMY_RADIUS + BULLET_RADIUS) {
+            this.player.heal(KILL_HEAL);
             enemy.dead = true;
             bullet.lifetime = 0.0;
             particleBurst(this.particles, enemy.pos, ENEMY_COLOR);
@@ -240,9 +244,6 @@ class Game {
         if (enemy.pos.distance(this.player.pos) <= PLAYER_RADIUS + ENEMY_RADIUS) {
           enemy.dead = true;
           this.player.damage(ENEMY_DAMAGE);
-          if (this.player.health <= 0.0) { 
-            globalFillFilter = grayScaleFiler; 
-          }
           particleBurst(this.particles, enemy.pos, PLAYER_COLOR)
         }
       }
@@ -290,10 +291,10 @@ class Game {
 
     fillRect(context, 0 + 20, 0 + 20, (width / 4) * (this.player.health / PLAYER_MAX_HEALTH), HEALTH_BAR_HEIGHT, HEALTH_BAR_COLOR);
 
-    if (this.pause) { fillMessage(context, "PAUSED: Press <Space> to unpause", MESSAGE_COLOR); } 
-    else if ( this.player.health <= 0.0 ) { fillMessage(context, "LOL! You're Dead", MESSAGE_COLOR); }
+    if (this.pause) { fillMessage(context, "PAUSED: Press <Space> to unpause", MESSAGE_COLOR); }
+    else if (this.player.health <= 0.0) { fillMessage(context, "LOL! You're Dead", MESSAGE_COLOR); }
     else { this.tutorial.render(context); }
-    
+
   }
 
   spawnEnemy() {
@@ -302,13 +303,6 @@ class Game {
 
   togglePause() {
     this.pause = !this.pause;
-
-    if (this.pause) {
-      globalFillFilter = grayScaleFiler;
-    }
-    else {
-      globalFillFilter = idColor;
-    }
   }
 
   keyDown(event) {
@@ -318,7 +312,7 @@ class Game {
       this.pressedKeys.add(key);
     }
     else if (event.code == "Space") {
-      if (this.player.health <= 0.0) { return ;}
+      if (this.player.health <= 0.0) { return; }
       this.togglePause();
     }
   }

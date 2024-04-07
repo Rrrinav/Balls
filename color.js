@@ -29,12 +29,29 @@ export class Color {
         return new Color (this.r, this.g, this.b, a);
     }
 
-    grayScale() {
+    grayScale(t = 0) {
+        // const grayValue = (this.r + this.g + this.b) / 3;
+        // return new Color (grayValue, grayValue, grayValue, this.a)
         const grayValue = (this.r + this.g + this.b) / 3;
-        return new Color (grayValue, grayValue, grayValue, this.a)
+        return new Color (lerp(this.r, grayValue, t), 
+                          lerp(this.g, grayValue, t),
+                          lerp(this.b, grayValue, t),
+                          this.a);
     }
 
+
+    // grayness(t) { 
+    //     const grayValue = (this.r + this.g + this.b) / 3;
+    //     return new Color (lerp(this.r, grayValue, t), 
+    //                       lerp(this.g, grayValue, t),
+    //                       lerp(this.b, grayValue, t),
+    //                       this.a)
+    // }
     invert() {
         return new Color (1.0 - this.r, 1.0 - this.g, 1.0 - this.b, this.a);
     }
+}
+
+function lerp (a, b, t) {
+    return a + (b - a) * t;
 }
