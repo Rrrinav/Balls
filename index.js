@@ -25,7 +25,7 @@ const PARTICLE_LIFETIME      = 0.7;
 const ENEMY_SPAWN_COOLDOWN   = 2; //2
 const ENEMY_SPAWN_DISTANCE   = 800; //800
 let windowResized            = false;
-const PARTICLE_GLOW          = Color.hex("#ffffff")
+const MESSAGE_COLOR          = Color.hex("#ffffff");
 
 
 const tutState = Object.freeze({
@@ -53,6 +53,16 @@ function fillCircle(context, center, radius, color = "green") {
   context.arc(center.x, center.y, radius, 0, 2 * Math.PI, false);
   context.fillStyle = globalCircleFilter(color).to_rgbaString();
   context.fill();
+}
+
+function fillMessage (context, text, color) {
+  const width = context.canvas.width;
+  const height = context.canvas.height;
+
+  context.fillStyle = color.to_rgbaString();
+  context.font = "50px VT323";
+  context.textAlign = "center"; 
+  context.fillText(text, width/2, height/2);
 }
 
 class V2 {
@@ -243,8 +253,10 @@ class Game {
   }
 
   render(context) {
-    const width = context.canvas.width;
-    const height = context.canvas.height;
+    if (windowResized) {
+      const width = context.canvas.width;
+      const height = context.canvas.height;
+      }
 
     context.clearRect(0, 0, width, height);
     fillCircle(context, this.playerPos, PLAYER_RADIUS, PLAYER_COLOR);
@@ -253,7 +265,8 @@ class Game {
     renderSomething(context, this.particles);
     renderSomething(context, this.enemies);
 
-    this.tutorial.render(context);
+    if (!this.pause) { this.tutorial.render(context); }
+    else { fillMessage(context, "PAUSED: Press <Space> to unpause", MESSAGE_COLOR); }
   }
 
   spawnEnemy() {
@@ -294,6 +307,9 @@ class Game {
   }
 
   mouseDown(event) {
+
+    if (this.pause) { return; }
+
     this.mousePos = new V2(event.clientX, event.clientY);
     this.tutorial.playerShot();
 
@@ -340,15 +356,8 @@ class textPop {
 
   render(context) {
 
-    if (windowResized) {
-    const width = context.canvas.width;
-    const height = context.canvas.height;
-    }
+    fillMessage(context, this.text, MESSAGE_COLOR.withAlpha(this.alpha));
 
-    context.fillStyle = `rgba(225, 225, 225, ${this.alpha})`;
-    context.font = "50px VT323";
-    context.textAlign = "center"; 
-    context.fillText(this.text, width/2, height/2);
   }
 
   fadeIn() {
