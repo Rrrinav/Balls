@@ -33,4 +33,8 @@ export class Color {
         const grayValue = (this.r + this.g + this.b) / 3;
         return new Color (grayValue, grayValue, grayValue, this.a)
     }
+
+    invert() {
+        return new Color (1.0 - this.r, 1.0 - this.g, 1.0 - this.b, this.a);
+    }
 }

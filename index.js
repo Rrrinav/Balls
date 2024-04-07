@@ -1,6 +1,7 @@
 import { Color } from './color.js';
 import { V2 } from './v2.js';
 
+
 const canvas = document.getElementById("canvas");
 const context = canvas.getContext("2d");
 canvas.height = window.innerHeight;
@@ -9,24 +10,28 @@ const width = canvas.width;
 const height = canvas.height;
 const PLAYER_RADIUS = 50;
 const PLAYER_SPEED = 1000; // Define the speed
+const PLAYER_MAX_HEALTH = 100;
+const PLAYER_COLOR = Color.hex("#D20062");
 const BULLET_SPEED = 2500;
 const BULLET_RADIUS = 15;
 const BULLET_LIFETIME = 2.0;
-const POPUP_SPEED = 1.7;
-const PLAYER_COLOR = Color.hex("#D20062");
 const BULLET_COLOR = Color.hex("#E0E0E0");
 const ENEMY_SPEED = PLAYER_SPEED / 3;
 const ENEMY_RADIUS = PLAYER_RADIUS / 1.5;
+const ENEMY_DAMAGE = PLAYER_MAX_HEALTH / 2; //5 
 const ENEMY_COLOR = Color.hex("#FFEBB2");
+const ENEMY_SPAWN_COOLDOWN = 0.01; //2
+const ENEMY_SPAWN_DISTANCE = 800; //800
 const PARTICLE_RADIUS = 8;
-const PARTICLE_COLOR = ENEMY_COLOR;
 const PARTICLE_COUNT = 50;
 const PARTICLE_MAG = BULLET_SPEED / 4;
 const PARTICLE_LIFETIME = 0.7;
-const ENEMY_SPAWN_COOLDOWN = 2; //2
-const ENEMY_SPAWN_DISTANCE = 800; //800
 let windowResized = false;
 const MESSAGE_COLOR = Color.hex("#ffffff");
+const POPUP_SPEED = 1.7;
+const HEALTH_BAR_HEIGHT = 10;
+const HEALTH_BAR_COLOR = Color.hex("#ff9900");
+const DEAD_MESS_COLOR = Color.hex("#5fcfff")
 
 
 const tutState = Object.freeze({
@@ -47,12 +52,12 @@ function idColor(color) {
   return color;
 }
 
-let globalCircleFilter = idColor;
+let globalFillFilter = idColor;
 
 function fillCircle(context, center, radius, color = "green") {
+  context.fillStyle = globalFillFilter(color).to_rgbaString();
   context.beginPath();
   context.arc(center.x, center.y, radius, 0, 2 * Math.PI, false);
-  context.fillStyle = globalCircleFilter(color).to_rgbaString();
   context.fill();
 }
 
@@ -66,17 +71,22 @@ function fillMessage(context, text, color) {
   context.fillText(text, width / 2, height / 2);
 }
 
+function fillRect(context, x, y, w, h, color) {
+  context.fillStyle = color.to_rgbaString();
+  context.fillRect(x, y, w, h);
+}
 
 function polarV2(mag, dir) {
   return new V2(Math.cos(dir) * mag, Math.sin(dir) * mag);
 }
 
 class Particles {
-  constructor(pos, vel, lifetime, radius) {
+  constructor(pos, vel, lifetime, radius, color) {
     this.pos = pos;
     this.vel = vel;
     this.lifetime = lifetime;
     this.radius = radius;
+    this.color = color;
   }
 
   update(dt) {
@@ -86,27 +96,31 @@ class Particles {
 
   render(context) {
     const a = this.lifetime / PARTICLE_LIFETIME;
-    fillCircle(context, this.pos, this.radius, PARTICLE_COLOR.withAlpha(a));
+    fillCircle(context, this.pos, this.radius, this.color.withAlpha(a));
   }
 };
 
-function particleBurst(particles, center) {
+function particleBurst(particles, center, color) {
   const n = (Math.random() * (1 + PARTICLE_COUNT - 4)) + 4;
   for (let i = 0; i < n; ++i) {
     particles.push(new Particles(center,
       polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI),
       PARTICLE_LIFETIME,
-      Math.random() * PARTICLE_RADIUS));
+      Math.random() * PARTICLE_RADIUS,
+      color));
   }
 }
 
 class Player {
+  health = PLAYER_MAX_HEALTH;
   constructor(pos) {
     this.pos = pos;
   }
 
   render(context) {
-    fillCircle(context, this.pos, PLAYER_RADIUS, PLAYER_COLOR)
+    if (this.health > 0.0) {
+      fillCircle(context, this.pos, PLAYER_RADIUS, PLAYER_COLOR)
+    }
   }
 
   update(dt, vel) {
@@ -118,7 +132,10 @@ class Player {
     const BulletVel = bulletDir.scale(BULLET_SPEED);
     const bulletPos = this.pos.add(bulletDir.scale(PLAYER_RADIUS));
     return new Bullet(bulletPos, BulletVel);
+  }
 
+  damage(value) {
+    this.health = Math.max(this.health - value, 0.0)
   }
 }
 
@@ -195,9 +212,11 @@ class Game {
     if (this.pause) {
       return;
     }
+    else if (this.player.health <= 0.0) {
+      dt = dt / 50;
+    }
 
     let velocity = new V2(0, 0);
-    let moved = false;
 
     for (let key of this.pressedKeys) {
       if (key in directionMap) {
@@ -208,11 +227,23 @@ class Game {
     this.player.update(dt, velocity);
 
     for (let enemy of this.enemies) {
-      for (let bullet of this.bullets) {
-        if (!enemy.dead && enemy.pos.distance(bullet.pos) <= ENEMY_RADIUS + BULLET_RADIUS) {
+      if (!enemy.dead) {
+        for (let bullet of this.bullets) {
+          if (enemy.pos.distance(bullet.pos) <= ENEMY_RADIUS + BULLET_RADIUS) {
+            enemy.dead = true;
+            bullet.lifetime = 0.0;
+            particleBurst(this.particles, enemy.pos, ENEMY_COLOR);
+          }
+        }
+      }
+      if (this.player.health > 0.0 && !enemy.dead) {
+        if (enemy.pos.distance(this.player.pos) <= PLAYER_RADIUS + ENEMY_RADIUS) {
           enemy.dead = true;
-          bullet.lifetime = 0.0;
-          particleBurst(this.particles, enemy.pos);
+          this.player.damage(ENEMY_DAMAGE);
+          if (this.player.health <= 0.0) { 
+            globalFillFilter = grayScaleFiler; 
+          }
+          particleBurst(this.particles, enemy.pos, PLAYER_COLOR)
         }
       }
     }
@@ -257,8 +288,12 @@ class Game {
     renderSomething(context, this.particles);
     renderSomething(context, this.enemies);
 
-    if (!this.pause) { this.tutorial.render(context); }
-    else { fillMessage(context, "PAUSED: Press <Space> to unpause", MESSAGE_COLOR); }
+    fillRect(context, 0 + 20, 0 + 20, (width / 4) * (this.player.health / PLAYER_MAX_HEALTH), HEALTH_BAR_HEIGHT, HEALTH_BAR_COLOR);
+
+    if (this.pause) { fillMessage(context, "PAUSED: Press <Space> to unpause", MESSAGE_COLOR); } 
+    else if ( this.player.health <= 0.0 ) { fillMessage(context, "LOL! You're Dead", MESSAGE_COLOR); }
+    else { this.tutorial.render(context); }
+    
   }
 
   spawnEnemy() {
@@ -269,10 +304,10 @@ class Game {
     this.pause = !this.pause;
 
     if (this.pause) {
-      globalCircleFilter = grayScaleFiler;
+      globalFillFilter = grayScaleFiler;
     }
     else {
-      globalCircleFilter = idColor;
+      globalFillFilter = idColor;
     }
   }
 
@@ -283,6 +318,7 @@ class Game {
       this.pressedKeys.add(key);
     }
     else if (event.code == "Space") {
+      if (this.player.health <= 0.0) { return ;}
       this.togglePause();
     }
   }
@@ -300,7 +336,7 @@ class Game {
   }
 
   mouseDown(event) {
-    if (this.pause) { return; }
+    if (this.pause || this.player.health <= 0.0) { return; }
     else {
       this.player.shootAt(new V2(event.clientX, event.clientY))
       this.bullets.push(this.player.shootAt(new V2(event.clientX, event.clientY)));
@@ -395,11 +431,12 @@ class Tutorial {
   getState() { return this.state; }
 };
 
+const game = new Game();
+
 let start = 0;
 let dx = PLAYER_SPEED;
 let dy = PLAYER_SPEED;
 
-const game = new Game();
 
 function step(timestamp) {
   if (start === 0) {
@@ -416,7 +453,6 @@ function step(timestamp) {
 
   window.requestAnimationFrame(step);
 }
-
 window.requestAnimationFrame(step);
 
 document.addEventListener("keydown", (event) => {
