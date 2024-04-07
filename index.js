@@ -1,31 +1,32 @@
 import { Color } from './color.js';
+import { V2 } from './v2.js';
 
-const canvas                 = document.getElementById("canvas");
-const context                = canvas.getContext("2d");
-canvas.height                = window.innerHeight;
-canvas.width                 = window.innerWidth;
-const width                  = canvas.width;
-const height                 = canvas.height;
-const PLAYER_RADIUS          = 50;
-const PLAYER_SPEED           = 1000; // Define the speed
-const BULLET_SPEED           = 2500;
-const BULLET_RADIUS          = 15;
-const BULLET_LIFETIME        = 2.0;
-const POPUP_SPEED            = 1.7;
-const PLAYER_COLOR           = Color.hex("#D20062");
-const BULLET_COLOR           = Color.hex("#E0E0E0");
-const ENEMY_SPEED            = PLAYER_SPEED / 3;
-const ENEMY_RADIUS           = PLAYER_RADIUS / 1.5;
-const ENEMY_COLOR            = Color.hex("#FFEBB2");
-const PARTICLE_RADIUS        = 8;
-const PARTICLE_COLOR         = ENEMY_COLOR;
-const PARTICLE_COUNT         = 50;
-const PARTICLE_MAG           = BULLET_SPEED / 4;
-const PARTICLE_LIFETIME      = 0.7;
-const ENEMY_SPAWN_COOLDOWN   = 2; //2
-const ENEMY_SPAWN_DISTANCE   = 800; //800
-let windowResized            = false;
-const MESSAGE_COLOR          = Color.hex("#ffffff");
+const canvas = document.getElementById("canvas");
+const context = canvas.getContext("2d");
+canvas.height = window.innerHeight;
+canvas.width = window.innerWidth;
+const width = canvas.width;
+const height = canvas.height;
+const PLAYER_RADIUS = 50;
+const PLAYER_SPEED = 1000; // Define the speed
+const BULLET_SPEED = 2500;
+const BULLET_RADIUS = 15;
+const BULLET_LIFETIME = 2.0;
+const POPUP_SPEED = 1.7;
+const PLAYER_COLOR = Color.hex("#D20062");
+const BULLET_COLOR = Color.hex("#E0E0E0");
+const ENEMY_SPEED = PLAYER_SPEED / 3;
+const ENEMY_RADIUS = PLAYER_RADIUS / 1.5;
+const ENEMY_COLOR = Color.hex("#FFEBB2");
+const PARTICLE_RADIUS = 8;
+const PARTICLE_COLOR = ENEMY_COLOR;
+const PARTICLE_COUNT = 50;
+const PARTICLE_MAG = BULLET_SPEED / 4;
+const PARTICLE_LIFETIME = 0.7;
+const ENEMY_SPAWN_COOLDOWN = 2; //2
+const ENEMY_SPAWN_DISTANCE = 800; //800
+let windowResized = false;
+const MESSAGE_COLOR = Color.hex("#ffffff");
 
 
 const tutState = Object.freeze({
@@ -34,13 +35,13 @@ const tutState = Object.freeze({
   "Finished": 2
 });
 
-const tutMessages = ["Use W A S D to move around", 
-"Left click to shoot in a particular direction",
-""];
+const tutMessages = ["Use W A S D to move around",
+  "Left click to shoot in a particular direction",
+  ""];
 
 function grayScaleFiler(color) {
   return color.grayScale();
-} 
+}
 
 function idColor(color) {
   return color;
@@ -55,48 +56,16 @@ function fillCircle(context, center, radius, color = "green") {
   context.fill();
 }
 
-function fillMessage (context, text, color) {
+function fillMessage(context, text, color) {
   const width = context.canvas.width;
   const height = context.canvas.height;
 
   context.fillStyle = color.to_rgbaString();
   context.font = "50px VT323";
-  context.textAlign = "center"; 
-  context.fillText(text, width/2, height/2);
+  context.textAlign = "center";
+  context.fillText(text, width / 2, height / 2);
 }
 
-class V2 {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-  }
-
-  add(v) {
-    return new V2(this.x + v.x, this.y + v.y);
-  }
-
-  scale(s) {
-    return new V2(this.x * s, this.y * s);
-  }
-
-  subtract(v) {
-    return new V2(this.x - v.x, this.y - v.y);
-  }
-
-  length() {
-    return Math.sqrt(this.x * this.x + this.y * this.y);
-  }
-
-  normalize() {
-    const length = this.length();
-    return new V2(this.x / length, this.y / length)
-  }
-
-  distance(v) {
-    return this.subtract(v).length();
-  }
-
-};
 
 function polarV2(mag, dir) {
   return new V2(Math.cos(dir) * mag, Math.sin(dir) * mag);
@@ -118,18 +87,41 @@ class Particles {
   render(context) {
     const a = this.lifetime / PARTICLE_LIFETIME;
     fillCircle(context, this.pos, this.radius, PARTICLE_COLOR.withAlpha(a));
-  } 
+  }
 };
 
 function particleBurst(particles, center) {
   const n = (Math.random() * (1 + PARTICLE_COUNT - 4)) + 4;
   for (let i = 0; i < n; ++i) {
-    particles.push(new Particles(center, 
-                                polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI), 
-                                PARTICLE_LIFETIME, 
-                                Math.random() * PARTICLE_RADIUS ));
+    particles.push(new Particles(center,
+      polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI),
+      PARTICLE_LIFETIME,
+      Math.random() * PARTICLE_RADIUS));
   }
 }
+
+class Player {
+  constructor(pos) {
+    this.pos = pos;
+  }
+
+  render(context) {
+    fillCircle(context, this.pos, PLAYER_RADIUS, PLAYER_COLOR)
+  }
+
+  update(dt, vel) {
+    this.pos = this.pos.add(vel.scale(dt));
+  }
+
+  shootAt(target) {
+    const bulletDir = target.subtract(this.pos).normalize();
+    const BulletVel = bulletDir.scale(BULLET_SPEED);
+    const bulletPos = this.pos.add(bulletDir.scale(PLAYER_RADIUS));
+    return new Bullet(bulletPos, BulletVel);
+
+  }
+}
+
 
 class Enemy {
   constructor(pos) {
@@ -139,10 +131,10 @@ class Enemy {
 
   update(dt, targetPos) {
     let vel = targetPos
-                .subtract(this.pos)   
-                .normalize()
-                .scale(ENEMY_SPEED * dt);
-  
+      .subtract(this.pos)
+      .normalize()
+      .scale(ENEMY_SPEED * dt);
+
     this.pos = this.pos.add(vel);
   }
 
@@ -153,9 +145,9 @@ class Enemy {
 
 class Bullet {
   constructor(pos, vel) {
-    this.pos        = pos;
-    this.vel        = vel;
-    this.lifetime   = BULLET_LIFETIME;
+    this.pos = pos;
+    this.vel = vel;
+    this.lifetime = BULLET_LIFETIME;
   }
 
   update(dt) {
@@ -183,25 +175,25 @@ function renderSomething(context, Something) {
 }
 
 class Game {
-  playerPos             = new V2(PLAYER_RADIUS + 10, PLAYER_RADIUS + 10);
-  mousePos              = new V2(0, 0);
-  pressedKeys           = new Set();
-  tutorial              = new Tutorial();
-  plrLearntMovement     = false;
-  bullets               = [];
-  enemies               = [];
-  particles             = [];
-  enemySpawnRate        = ENEMY_SPAWN_COOLDOWN;
-  enemySpawnCooldown    = this.enemySpawnRate;
-  pause                 = false;
+  player = new Player(new V2(PLAYER_RADIUS + 10, PLAYER_RADIUS + 10))
+  mousePos = new V2(0, 0);
+  pressedKeys = new Set();
+  tutorial = new Tutorial();
+  plrLearntMovement = false;
+  bullets = [];
+  enemies = [];
+  particles = [];
+  enemySpawnRate = ENEMY_SPAWN_COOLDOWN;
+  enemySpawnCooldown = this.enemySpawnRate;
+  pause = false;
 
   constructor() {
-    
+
   }
 
   update(dt) {
     if (this.pause) {
-      return ;
+      return;
     }
 
     let velocity = new V2(0, 0);
@@ -213,11 +205,11 @@ class Game {
       }
     }
 
-    this.playerPos = this.playerPos.add(velocity.scale(dt));
+    this.player.update(dt, velocity);
 
     for (let enemy of this.enemies) {
       for (let bullet of this.bullets) {
-        if (!enemy.dead && enemy.pos.distance(bullet.pos) <= ENEMY_RADIUS + BULLET_RADIUS )  {
+        if (!enemy.dead && enemy.pos.distance(bullet.pos) <= ENEMY_RADIUS + BULLET_RADIUS) {
           enemy.dead = true;
           bullet.lifetime = 0.0;
           particleBurst(this.particles, enemy.pos);
@@ -228,12 +220,12 @@ class Game {
     for (let bullet of this.bullets) {
       bullet.update(dt);
     }
-     this.bullets = this.bullets.filter(bullet => bullet.lifetime > 0.0);
+    this.bullets = this.bullets.filter(bullet => bullet.lifetime > 0.0);
 
     for (let enemy of this.enemies) {
-      enemy.update(dt, this.playerPos);
+      enemy.update(dt, this.player.pos);
     }
-    this.enemies = this.enemies.filter( enemy => !enemy.dead);
+    this.enemies = this.enemies.filter(enemy => !enemy.dead);
 
     for (let particle of this.particles) {
       particle.update(dt);
@@ -242,7 +234,7 @@ class Game {
 
     this.tutorial.update(dt);
 
-    if(this.tutorial.state == tutState.Finished) {
+    if (this.tutorial.state == tutState.Finished) {
       this.enemySpawnCooldown -= dt;
       if (this.enemySpawnCooldown <= 0.0) {
         this.spawnEnemy();
@@ -256,11 +248,11 @@ class Game {
     if (windowResized) {
       const width = context.canvas.width;
       const height = context.canvas.height;
-      }
+    }
 
     context.clearRect(0, 0, width, height);
-    fillCircle(context, this.playerPos, PLAYER_RADIUS, PLAYER_COLOR);
-    
+    this.player.render(context);
+
     renderSomething(context, this.bullets);
     renderSomething(context, this.particles);
     renderSomething(context, this.enemies);
@@ -270,7 +262,7 @@ class Game {
   }
 
   spawnEnemy() {
-    this.enemies.push(new Enemy(this.playerPos.add(polarV2(ENEMY_SPAWN_DISTANCE, Math.random() * 2 * Math.PI))))
+    this.enemies.push(new Enemy(this.player.pos.add(polarV2(ENEMY_SPAWN_DISTANCE, Math.random() * 2 * Math.PI))))
   }
 
   togglePause() {
@@ -286,20 +278,21 @@ class Game {
 
   keyDown(event) {
     const key = event.key.toLowerCase();
-    if (key == "w" || key == "s" || key == "a" || key == "d" ) {
+    if (key == "w" || key == "s" || key == "a" || key == "d") {
       this.tutorial.playerMoved();
       this.pressedKeys.add(key);
     }
-    else if(event.code == "Space") {
+    else if (event.code == "Space") {
       this.togglePause();
     }
   }
 
   keyUp(event) {
     const key = event.key.toLowerCase();
-    if (key == "w" || key == "s" || key == "a" || key == "d" ) {
-    this.tutorial.playerMoved();}
-    this.pressedKeys.delete(key);  
+    if (key == "w" || key == "s" || key == "a" || key == "d") {
+      this.tutorial.playerMoved();
+    }
+    this.pressedKeys.delete(key);
   }
 
   mouseMove(event) {
@@ -307,17 +300,12 @@ class Game {
   }
 
   mouseDown(event) {
-
     if (this.pause) { return; }
-
-    this.mousePos = new V2(event.clientX, event.clientY);
-    this.tutorial.playerShot();
-
-    const bulletDir = this.mousePos.subtract(this.playerPos).normalize();
-    const BulletVel = bulletDir.scale(BULLET_SPEED);
-    const bulletPos = this.playerPos.add(bulletDir.scale(PLAYER_RADIUS));
-
-    this.bullets.push(new Bullet(bulletPos, BulletVel));
+    else {
+      this.player.shootAt(new V2(event.clientX, event.clientY))
+      this.bullets.push(this.player.shootAt(new V2(event.clientX, event.clientY)));
+      this.tutorial.playerShot();
+    }
   }
 };
 
@@ -334,20 +322,20 @@ class textPop {
   update(dt) {
     this.alpha = this.alpha + this.dalpha * dt;
 
-    if ( this.dalpha < 0.0 &&  this.alpha <= 0.0) {
+    if (this.dalpha < 0.0 && this.alpha <= 0.0) {
       this.alpha = 0.0;
       this.dalpha = 0.0;
-    
-      if ( this.onFadedOut !== undefined ) {
+
+      if (this.onFadedOut !== undefined) {
         this.onFadedOut();
       }
     }
 
-    if ( this.dalpha > 1.0 && this.alpha >= 1.0 ) {
+    if (this.dalpha > 1.0 && this.alpha >= 1.0) {
       this.dalpha = 0.0;
       this.alpha = 1.0;
 
-      if ( this.onFadedIn !== undefined) {
+      if (this.onFadedIn !== undefined) {
         this.onFadedIn();
       }
     }
@@ -439,11 +427,11 @@ document.addEventListener("keyup", (event) => {
   game.keyUp(event);
 });
 
-document.addEventListener('mousemove', (event) =>{
+document.addEventListener('mousemove', (event) => {
   game.mouseMove(event);
 });
 
-document.addEventListener('mousedown', (event) =>{
+document.addEventListener('mousedown', (event) => {
   game.mouseDown(event);
 });
 
