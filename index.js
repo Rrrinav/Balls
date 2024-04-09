@@ -1,12 +1,12 @@
-import { Color } from './color.js';
 import { V2 } from './v2.js';
+import { Color } from './color.js';
 
 const canvas                = document.getElementById("canvas");
 const context               = canvas.getContext("2d");
 canvas.height               = window.innerHeight;
 canvas.width                = window.innerWidth;
-const PLAYER_RADIUS         = 50;
-const PLAYER_SPEED          = 800; // Define the speed
+const PLAYER_RADIUS         = 40;
+const PLAYER_SPEED          = 600; // Define the speed
 const PLAYER_MAX_HEALTH     = 100;
 const PLAYER_COLOR          = Color.hex("#5F0A87");
 const PLAYER_TRAIL_COLOR    = Color.hex("#D84797") //
@@ -23,7 +23,7 @@ const ENEMY_COLOR           = Color.hex("#7796CB");
 const ENEMY_TRAIL_COLOR     = Color.hex("#77ffFf") //D1D2F9
 const ENEMY_FADEOUT         = 2.0;
 const ENEMY_SPAWN_COOLDOWN  = 2; //2
-const ENEMY_SPAWN_DISTANCE  = 800; //800
+const ENEMY_SPAWN_DISTANCE  = 800; //800x
 const PARTICLE_RADIUS       = 8;
 const PARTICLE_COUNT        = 50;
 const PARTICLE_MAG          = BULLET_SPEED / 4;
@@ -32,10 +32,12 @@ const MESSAGE_COLOR         = Color.hex("#ffffff");
 const POPUP_SPEED           = 1.7;
 const HEALTH_BAR_HEIGHT     = 10;
 const HEALTH_BAR_COLOR      = Color.hex("#ff9900");
-const DEAD_MESS_COLOR       = Color.hex("#5fcfff")
+const DEAD_MESS_COLOR       = Color.hex("#5fcfff");
 let windowResized           = false;
 const PLAYER_FADEOUT        = 2.0;
 const TRAIL_COOLDOWN        = 1 / 13;
+const WHITE                 = Color.hex("#96EFE4").withAlpha(0.3);
+const BIG_CIRCLE_COLOR      = Color.hex("#9898B4")
 
 const tutState = Object.freeze({
   "learningMovement": 0,
@@ -49,6 +51,16 @@ const tutMessages = ["Use W A S D to move around",
 
 function Random(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
+function polarV2(mag, dir) {
+  return new V2(Math.cos(dir) * mag, Math.sin(dir) * mag);
+}
+
+
+function lerp (a, b, t) {
+  return a + (b - a) * t;
 }
 
 class Camera {
@@ -79,6 +91,12 @@ class Camera {
     return point.subtract(this.pos).add(new V2(width / 2, height / 2));
   }
 
+  getScreenWorldBounds() {
+    let topLeft = this.toWorld(new V2(0, 0))
+    let bottomRight = this.toWorld(new V2(this.context.canvas.width, this.context.canvas.height))
+    return [topLeft, bottomRight]
+}
+
   toWorld(point) {
     const width = this.context.canvas.width;
     const height = this.context.canvas.height;
@@ -101,6 +119,30 @@ class Camera {
     this.context.arc(viewCenter.x, viewCenter.y, radius, 0, 2 * Math.PI, false);
     this.context.fill();
   }
+
+  designFillCircle(x, y, radius, color = "green") {
+
+    if (typeof color === "string") {
+        this.context.fillStyle = color; // If color is a string, directly set it
+    } else {
+        // If color is not a string, assume it's an instance of a Color class with rgbaString method
+        this.context.fillStyle = color.grayScale(this.grayness).to_rgbaString();
+    }
+
+    this.context.beginPath();
+    this.context.arc(x, y, radius, 0, 2 * Math.PI, false);
+    this.context.fill();
+}
+
+
+  strokeCircle(x, y, radius, width, color = "white") {
+    this.context.beginPath();
+    this.context.arc(x, y, radius, 0, 2 * Math.PI);
+    this.context.lineWidth = width;
+    this.context.strokeStyle = color.to_rgbaString();
+    this.context.stroke();
+  }
+  
 
   fillRect(x, y, w, h, color) {
     if( color != HEALTH_BAR_COLOR) {
@@ -144,11 +186,174 @@ class Camera {
     this.context.textAlign = "start";
     this.context.fillText(text, 20, 60);
   }
+
+  renderSquare(color, points) {
+    context.beginPath();
+    context.moveTo(points.a.x, points.a.y);
+    context.lineTo(points.b.x, points.b.y);
+    context.lineTo(points.c.x, points.c.y);
+    context.lineTo(points.d.x, points.d.y);
+    context.closePath();
+    context.strokeStyle = color.to_rgbaString();
+    context.stroke();
+  }
 }
 
+class Square {
+  a = new V2(0, 0);
+  b = new V2(0, 0);
+  c = new V2(0, 0);
+  d = new V2(0, 0);
+  constructor(circle) {
+    this.parentCircle = circle;
+  }
 
-function polarV2(mag, dir) {
-  return new V2(Math.cos(dir) * mag, Math.sin(dir) * mag);
+  update(angle, threshold) {
+    this.a = polarV2(this.parentCircle.radius, angle + threshold).add(
+      this.parentCircle.position
+    );
+  
+    this.b = polarV2(
+      this.parentCircle.radius,
+      angle + threshold + Math.PI / 2 
+    ).add(this.parentCircle.position);
+  
+    this.c = polarV2(
+      this.parentCircle.radius,
+      angle + threshold + Math.PI
+    ).add(this.parentCircle.position);
+  
+    this.d = polarV2(
+      this.parentCircle.radius,
+      angle + threshold + (3 * Math.PI) / 2
+    ).add(this.parentCircle.position);
+  }
+  
+  render(camera, color) {
+    const points = {
+      a: camera.toScreen(this.a),
+      b: camera.toScreen(this.b),
+      c: camera.toScreen(this.c),
+      d: camera.toScreen(this.d)
+    };
+    camera.renderSquare(color, points);
+  }
+}
+
+class Circle {
+  constructor(radius, color, position) {
+    this.position = position;
+    this.radius = radius;
+    this.color = color;
+  }
+
+  update(parentCircle, radius, angle) {
+    this.position = polarV2(radius, angle).add(parentCircle.position);
+  }
+
+  strokerender(camera, width, color = this.color) {
+    const viewPos = camera.toScreen(this.position);
+    camera.strokeCircle(viewPos.x, viewPos.y, this.radius, width, color);
+  }
+  
+  fillCircle(camera, color = this.color) {
+    const viewPos = camera.toScreen(this.position);
+    camera.designFillCircle(viewPos.x, viewPos.y, this.radius, color);
+  }
+}  
+
+class Design {
+  constructor(position) {
+    this.position = position;
+    this.innerCircle = new Circle(60, WHITE, this.position);
+    this.perCircle1 = new Circle(20, WHITE, this.position);
+    this.perCircle2 = new Circle(5, WHITE, this.position);
+    this.squareCircle = new Circle(180, WHITE, this.position);
+    this.square = new Square(this.squareCircle);
+    this.square2 = new Square(this.squareCircle);
+    this.outerCircle = new Circle(300, WHITE, this.position);
+    this.outPerCircle1 = new Circle(50, WHITE, this.position);
+    this.outPer2Circle2 = new Circle(10, WHITE, this.position);
+    this.outPer2Circle1 = new Circle(10, WHITE, this.position);
+    this.outPerCircle2 = new Circle(20, WHITE, this.position);
+    this.bigCircle = new Circle(300, BIG_CIRCLE_COLOR.withAlpha(0.05), this.position);
+  }
+
+  rotateClockwise(elapsedTime, rate) {
+    return ((elapsedTime % rate) / rate) * 2 * Math.PI;
+  }
+
+  rotateAntiClockwise(elapsedTime, rate) {
+    return ((rate - (elapsedTime % rate)) / rate) * 2 * Math.PI;;
+  }
+
+  update(el) {
+    const elapsedTime = el;
+    const angle = this.rotateClockwise(elapsedTime, 3000); // Normalize angle
+    this.perCircle1.update(this.innerCircle, 60, angle);
+    
+    const angle2 = this.rotateAntiClockwise(elapsedTime, 800); // Normalize angle
+    this.perCircle2.update(this.perCircle1, 20 + 12, angle2);
+
+    const angle3 =this.rotateClockwise(elapsedTime, 10000);; // Normalize angle
+    this.square.update(angle3, 0);
+    this.square2.update(angle3, Math.PI / 4);
+
+    const angle4 = this.rotateAntiClockwise(elapsedTime, 9000); // Normalize angle
+    const angle6 = this.rotateClockwise(elapsedTime, 4000);
+    this.outPerCircle1.update(this.outerCircle, this.outerCircle.radius, angle4);
+    this.outPerCircle2.update(this.outerCircle, this.outerCircle.radius, angle6);
+
+    const angle5 = this.rotateClockwise(elapsedTime, 1000);
+    this.outPer2Circle2.update(this.outPerCircle1, this.outPerCircle1.radius + 40, angle5);
+    this.outPer2Circle1.update(this.outPerCircle1, this.outPerCircle1.radius + 40, angle5 + Math.PI);
+  }
+
+  render(camera) {
+    this.innerCircle.strokerender(camera, 1);
+    this.perCircle1.strokerender(camera, 1);
+    this.perCircle2.fillCircle(camera);
+    this.square.render(camera, WHITE);
+    this.square2.render(camera, WHITE);
+    // this.outerCircle.strokerender(1);
+    this.outPerCircle1.strokerender(camera, 1);
+    this.outPerCircle2.strokerender(camera, 1);
+    this.outPer2Circle2.fillCircle(camera);
+    this.outPer2Circle1.strokerender(camera, 1);
+    this.bigCircle.fillCircle(camera);
+  }
+}
+
+class Background {
+  cellPoints = [];
+  cellWidth = 1000;
+  cellHeight = 1000;
+  el = 0;
+
+  constructor() {
+
+  }
+
+  render(camera, el) {
+    let bounds = camera.getScreenWorldBounds();
+    let gridBoundsXMin = Math.floor(bounds[0].x / this.cellWidth);
+    let gridBoundsXMax = Math.ceil(bounds[1].x / this.cellWidth);
+    let gridBoundsYMin = Math.floor(bounds[0].y / this.cellHeight);
+    let gridBoundsYMax = Math.ceil(bounds[1].y / this.cellHeight);
+
+    for (let x = gridBoundsXMin; x <= gridBoundsXMax; x++) {
+      for (let y = gridBoundsYMin; y <= gridBoundsYMax; y++) {
+        let cellPos = new V2(x * this.cellWidth, y * this.cellHeight);
+        let design = this.createDesign(cellPos);
+        design.update(el);
+        design.render(camera);
+      }
+    }
+  }
+
+  createDesign(cellPos) {
+    return new Design(cellPos);
+  }
 }
 
 class Particles {
@@ -319,6 +524,7 @@ class Game {
   enemySpawnRate = ENEMY_SPAWN_COOLDOWN;
   enemySpawnCooldown = this.enemySpawnRate;
   pause = false;
+  background = new Background();
 
   constructor(context) {
     this.camera = new Camera(context)
@@ -339,7 +545,6 @@ class Game {
 
     this.camera.setTarget(this.player.pos);
     this.camera.update(dt);
-
     let velocity = new V2(0, 0);
     for (let key of this.pressedKeys) {
       if (key in directionMap) {
@@ -409,11 +614,18 @@ class Game {
   }
   
 
-  render() {
+  render(el) {
       const width = this.camera.width();
       const height = this.camera.height();
 
     this.camera.clear();
+    if(this.pause) {
+      this.background.render(this.camera, 400);
+    }
+    else {
+    this.background.render(this.camera, el);
+    }
+
     this.player.render(this.camera);
 
     this.renderSomething(this.bullets);
@@ -562,19 +774,22 @@ class Tutorial {
 
 const game = new Game(context);
 
-let start = 0;
-function step(timestamp) {
-  if (start === 0) {
-    start = timestamp;
-  }
-  const dt = (timestamp - start) * 0.001;
-  start = timestamp;
+let startTime = 0; // Record the start time
 
+function step(timestamp) {
+  if (startTime === 0) {
+    startTime = timestamp;
+  }
+  const dt = (timestamp - startTime) * 0.001;
+  startTime = timestamp;
+
+
+  
   canvas.height = window.innerHeight;
   canvas.width = window.innerWidth;
 
   game.update(dt);
-  game.render(context);
+  game.render(startTime);
 
   window.requestAnimationFrame(step);
 }

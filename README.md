@@ -19,4 +19,4 @@ This is a simple shooter game built using HTML Canvas and JavaScript. This was c
 - Colorful particle effects add visual flair to the gameplay.
 - Responsive design - the game adjusts to the size of the browser window.
 ---
-### This game is totally not final and will be updated timely
+### This game is totally not final and will be updated timely. However it is feature complete.
