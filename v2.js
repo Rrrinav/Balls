@@ -22,8 +22,8 @@ export class V2 {
   
     normalize() {
       const length = this.length();
-      return new V2(this.x / length, this.y / length)
-    }
+      return length === 0 ? new V2(0, 0) : new V2(this.x / length, this.y / length);
+      }
   
     distance(v) {
       return this.subtract(v).length();

@@ -23,7 +23,8 @@ const ENEMY_COLOR           = Color.hex("#7796CB");
 const ENEMY_TRAIL_COLOR     = Color.hex("#77ffFf") //D1D2F9
 const ENEMY_FADEOUT         = 2.0;
 const ENEMY_SPAWN_COOLDOWN  = 2; //2
-const ENEMY_SPAWN_DISTANCE  = 800; //800x
+const ENEMY_SPAWN_DISTANCE  = 700; //800x
+const ENEMY_SPAWN_GROWTH    = 1.01;
 const PARTICLE_RADIUS       = 8;
 const PARTICLE_COUNT        = 50;
 const PARTICLE_MAG          = BULLET_SPEED / 4;
@@ -471,18 +472,22 @@ class Enemy {
   }
 
   update(dt, targetPos) {
-    let vel = targetPos
-    .subtract(this.pos)
-    .normalize()
-    .scale(ENEMY_SPEED * dt);
+    let vel = targetPos.subtract(this.pos).normalize().scale(ENEMY_SPEED * dt);
+    
     this.trail.push(this.pos);
     this.pos = this.pos.add(vel);
-    this.trail.update(dt);
+    this.trail.update(dt)
+    
+    if (this.radius < ENEMY_RADIUS) {
+        this.radius += ENEMY_SPAWN_ANIMATION_SPEED * dt;
+    } else {
+        this.radius = ENEMY_RADIUS;
+    };
   }
 
   render(camera) {
     this.trail.render(camera);
-    camera.fillCircle(this.pos, ENEMY_RADIUS, ENEMY_COLOR);
+    camera.fillCircle(this.pos, this.radius, ENEMY_COLOR);
   }
 }
 
@@ -548,9 +553,10 @@ class Game {
     let velocity = new V2(0, 0);
     for (let key of this.pressedKeys) {
       if (key in directionMap) {
-        velocity = velocity.add(directionMap[key].scale(PLAYER_SPEED));
-      }
+        velocity = velocity.add(directionMap[key]);
+     }
     }
+    velocity= velocity.normalize().scale(PLAYER_SPEED);
 
     this.player.update(dt, velocity);
 
@@ -599,11 +605,11 @@ class Game {
 
     if (this.tutorial.state == tutState.Finished) {
       this.enemySpawnCooldown -= dt;
+
       if (this.enemySpawnCooldown <= 0.0) {
         this.spawnEnemy();
         this.enemySpawnCooldown = this.enemySpawnRate;
-        this.enemySpawnRate = Math.max(this.enemySpawnRate -= 0.01, 0.01);
-      }
+        this.enemySpawnRate /= ENEMY_SPAWN_GROWTH;      }
     }
   }
 
@@ -647,7 +653,7 @@ class Game {
   }
 
   spawnEnemy() {
-    this.enemies.push(new Enemy(this.player.pos.add(polarV2(ENEMY_SPAWN_DISTANCE, Math.random() * 2 * Math.PI))))
+    this.enemies.push(new Enemy(this.player.pos.add(polarV2(Random(400, ENEMY_SPAWN_DISTANCE), Math.random() * 2 * Math.PI))))
   }
 
   togglePause() {
@@ -814,3 +820,13 @@ document.addEventListener('mousedown', (event) => {
 window.addEventListener('resize', event => {
   windowResized = true;
 })
+
+window.addEventListener('blur', event => {
+  if (game.player.health > 0.0) {
+      game.paused = true;
+  }
+});
+
+window.addEventListener('focus', event => {
+  start = performance.now() - 1000 / 60;
+});
