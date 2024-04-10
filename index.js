@@ -817,16 +817,17 @@ document.addEventListener('mousedown', (event) => {
   game.mouseDown(event);
 });
 
-window.addEventListener('resize', event => {
+window.addEventListener('resize', () => {
   windowResized = true;
 })
 
-window.addEventListener('blur', event => {
+window.addEventListener('blur', () => {
   if (game.player.health > 0.0) {
-      game.paused = true;
+      game.pause = true;
   }
 });
 
-window.addEventListener('focus', event => {
-  start = performance.now() - 1000 / 60;
+window.addEventListener('focus', () => {
+  game.pause = false;
+  startTime = performance.now() - 1000 / 60;
 });

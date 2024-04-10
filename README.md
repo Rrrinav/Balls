@@ -18,5 +18,8 @@ This is a simple shooter game built using HTML Canvas and JavaScript. This was c
 - Enemy spawning increases over time, providing increasing challenge.
 - Colorful particle effects add visual flair to the gameplay.
 - Responsive design - the game adjusts to the size of the browser window.
+
+---
+Inspired by [Tsoding zzwe](https://tsoding.github.io/zzzwe/);
 ---
 ### This game is totally not final and will be updated timely. However it is feature complete.
