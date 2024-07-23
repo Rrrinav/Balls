@@ -34,7 +34,7 @@ const POPUP_SPEED = 1.7;
 const HEALTH_BAR_HEIGHT = 10;
 const HEALTH_BAR_COLOR = Color.hex("#ff9900");
 const DEAD_MESS_COLOR = Color.hex("#5fcfff");
-let windowResized = false;
+let windowResized = true;
 const PLAYER_FADEOUT = 2.0;
 const TRAIL_COOLDOWN = 1 / 13;
 const WHITE = Color.hex("#96EFE4").withAlpha(0.3);
@@ -68,6 +68,7 @@ class Camera {
   pos = new V2(0.0, 0.0);
   grayness = 0.0;
   vel = new V2(0, 0);
+  pixel_factor = 1.0;
 
   constructor(context) {
     this.context = context;
@@ -81,17 +82,22 @@ class Camera {
     this.vel = target.subtract(this.pos).scale(2);
   }
 
+  set_scale(x) {
+    this.pixel_factor = 1 / x; 
+    this.context.setTransform(x, 0, 0, x, 0, 0);
+  }
+
   width() {
-    return this.context.canvas.width;
+    return this.context.canvas.width * this.pixel_factor;
   }
 
   height() {
-    return this.context.canvas.height;
+    return this.context.canvas.height * this.pixel_factor;
   }
 
   toScreen(point) {
-    const width = this.context.canvas.width;
-    const height = this.context.canvas.height;
+    const width = this.width();
+    const height = this.height();
 
     return point.subtract(this.pos).add(new V2(width / 2, height / 2));
   }
@@ -108,14 +114,22 @@ class Camera {
     const width = this.context.canvas.width;
     const height = this.context.canvas.height;
 
-    return point.subtract(new V2(width / 2, height / 2)).add(this.pos);
+    return point
+      .subtract(new V2(width / 2, height / 2))
+      .scale(this.pixel_factor)
+      .add(this.pos);
   }
 
   clear() {
-    const width = this.context.canvas.width;
-    const height = this.context.canvas.height;
-
-    this.context.clearRect(0, 0, width, height);
+    this.context.save();
+    this.context.setTransform(1, 0, 0, 1, 0, 0);
+    this.context.clearRect(
+      0,
+      0,
+      this.context.canvas.width,
+      this.context.canvas.height,
+    );
+    this.context.restore();
   }
 
   fillCircle(center, radius, color = "green") {
@@ -160,9 +174,9 @@ class Camera {
     }
   }
 
-  fillMessage(text, color) {
-    const width = this.context.canvas.width;
-    const height = this.context.canvas.height;
+  fillMessage4(text, color) {
+    const width = this.width();
+    const height = this.height();
 
     this.context.fillStyle = color.to_rgbaString();
     this.context.font = "50px VT323";
@@ -170,9 +184,19 @@ class Camera {
     this.context.fillText(text, width / 2, height / 2 - 50);
   }
 
+  fillMessage(text, color) {
+    const width = this.width();
+    const height = this.height();
+
+    this.context.fillStyle = color.to_rgbaString();
+    this.context.font = "50px VT323";
+    this.context.textAlign = "center";
+    this.context.fillText(text, width / 2, height / 2 - 100);
+  }
+
   fillMessage2(text, color) {
-    const width = this.context.canvas.width;
-    const height = this.context.canvas.height;
+    const width = this.width();
+    const height = this.height();
 
     this.context.fillStyle = color.to_rgbaString();
     this.context.font = "50px VT323";
@@ -181,8 +205,8 @@ class Camera {
   }
 
   fillMessage3(text, color) {
-    const width = this.context.canvas.width;
-    const height = this.context.canvas.height;
+    const width = this.width();
+    const height = this.height();
 
     this.context.fillStyle = color.to_rgbaString();
     this.context.font = "50px VT323";
@@ -552,7 +576,7 @@ const directionMap = {
 };
 
 class Game {
-  player = new Player(new V2(0, 0));
+  player = new Player(new V2(0 , 0));
   score = 0.0;
   mousePos = new V2(0, 0);
   pressedKeys = new Set();
@@ -568,8 +592,18 @@ class Game {
 
   constructor(context) {
     this.camera = new Camera(context);
+    this.high_score = this.get_high_score();
   }
 
+  get_high_score() {
+    return parseInt(localStorage.getItem("highScore")) || 0;
+  }
+
+  save_high_score() {
+    if (this.score > this.high_score) {
+      localStorage.setItem("highScore", this.high_score);
+    }
+  }
   update(dt) {
     if (this.pause) {
       this.camera.grayness = 1.0;
@@ -578,7 +612,8 @@ class Game {
       this.camera.grayness = 1.0 - this.player.health / PLAYER_MAX_HEALTH;
     }
 
-    if (this.player.health <= 0.0) { 
+    if (this.player.health <= 0.0) {
+      this.save_high_score();
       dt = dt / 50;
     }
 
@@ -691,6 +726,17 @@ class Game {
         MESSAGE_COLOR,
       );
     } else if (this.player.health <= 0.0) {
+      if (this.score < this.high_score) {
+        this.camera.fillMessage4(
+          `HIGH SCORE: ${this.high_score}`,
+          MESSAGE_COLOR,
+        );
+      } else {
+        this.camera.fillMessage4(
+          `NEW HIGH SCORE: ${this.score}`,
+          MESSAGE_COLOR,
+        );
+      }
       this.camera.fillMessage3("Press <space> to restart", MESSAGE_COLOR);
       this.camera.fillMessage("GAME OVER: You're dead, lol!", MESSAGE_COLOR);
       this.camera.fillMessage2(`YOUR SCORE: ${this.score}`, MESSAGE_COLOR);
@@ -839,20 +885,24 @@ class Tutorial {
 
 const game = new Game(context);
 
-let startTime = 0; // Record the start time
-
-function step(timestamp) {
-  if (startTime === 0) {
-    startTime = timestamp;
-  }
-  const dt = (timestamp - startTime) * 0.001;
-  startTime = timestamp;
-
-  canvas.height = window.innerHeight;
+function setupCanvas() {
   canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const scale = Math.min(window.innerWidth / 3840, window.innerHeight / 2160);
+  game.camera.set_scale(scale);
+  game.render(performance.now()); // Force a render after setup/resize
+}
+
+let lastTimestamp = 0;
+function step(timestamp) {
+  if (lastTimestamp === 0) {
+    lastTimestamp = timestamp;
+  }
+  const dt = (timestamp - lastTimestamp) / 1000; // Convert to seconds
+  lastTimestamp = timestamp;
 
   game.update(dt);
-  game.render(startTime);
+  game.render(timestamp);
 
   window.requestAnimationFrame(step);
 }
@@ -861,6 +911,8 @@ window.requestAnimationFrame(step);
 document.addEventListener("keydown", (event) => {
   game.keyDown(event);
 });
+
+window.addEventListener('load', setupCanvas);
 
 document.addEventListener("keyup", (event) => {
   game.keyUp(event);
@@ -876,6 +928,11 @@ document.addEventListener("mousedown", (event) => {
 
 window.addEventListener("resize", () => {
   windowResized = true;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const scale = Math.min(window.innerWidth / 3840, window.innerHeight / 2160);
+  game.camera.set_scale(scale);
+  game.render(performance.now()); // Force a render after resize
 });
 
 window.addEventListener("blur", () => {
