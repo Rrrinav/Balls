@@ -422,22 +422,32 @@ class Particles {
   }
 
   render(camera) {
-    const a = this.lifetime / PARTICLE_LIFETIME;
+    const a = this.lifetime / PARTICLE_LIFETIME; 
     camera.fillCircle(this.pos, this.radius, this.color.withAlpha(a));
   }
 }
 
-function particleBurst(particles, center, color) {
-  const n = Random(20, PARTICLE_COUNT);
-  for (let i = 0; i < n; ++i) {
-    particles.push(
-      new Particles(
-        center,
-        polarV2(Math.random() * PARTICLE_MAG, Math.random() * 2 * Math.PI),
-        PARTICLE_LIFETIME,
-        Math.random() * PARTICLE_RADIUS,
-        color,
-      ),
+function particleBurst(particleArray, position, color, direction) {
+  const PARTICLE_COUNT = 20;
+  const PARTICLE_SPEED = 500;
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // Generate a random angle for the particle
+    const angle = Math.random() * 2 * Math.PI;
+
+    // Randomize the particle speed a bit for variety
+    const speed = PARTICLE_SPEED * (0.5 + Math.random() * 0.5);
+
+    // Calculate the particle velocity based on the angle and speed
+    const velocity = new V2(Math.cos(angle), Math.sin(angle)).scale(speed);
+
+    // Reflect the direction of the hit by adding a component of the hit direction
+    const reflectedVelocity = velocity.add(
+      direction.normalize().scale(PARTICLE_SPEED * 0.5),
+    );
+    // Create the particle with the position, reflected velocity, color, and lifetime
+    particleArray.push(
+      new Particles(position, reflectedVelocity, PARTICLE_LIFETIME, 5, color),
     );
   }
 }
@@ -637,7 +647,7 @@ class Game {
             this.score += KILL_SCORE;
             enemy.dead = true;
             bullet.lifetime = 0.0;
-            particleBurst(this.particles, enemy.pos, ENEMY_COLOR);
+            particleBurst(this.particles, enemy.pos, ENEMY_COLOR, bullet.vel);
           }
         }
       }
@@ -653,7 +663,12 @@ class Game {
         ) {
           enemy.dead = true;
           this.player.damage(ENEMY_DAMAGE);
-          particleBurst(this.particles, enemy.pos, PLAYER_COLOR);
+          particleBurst(
+            this.particles,
+            enemy.pos,
+            PLAYER_COLOR,
+            enemy.pos.subtract(this.player.pos).normalize(),
+          );
         }
       }
     }
@@ -688,7 +703,7 @@ class Game {
     }
   }
 
-  renderSomething(Something) {
+  renderSomething(Something) { 
     for (let thing of Something) {
       thing.render(this.camera);
     }
@@ -696,7 +711,6 @@ class Game {
 
   render(el) {
     const width = this.camera.width();
-    const height = this.camera.height();
 
     this.camera.clear();
     if (this.pause) {
@@ -888,7 +902,7 @@ const game = new Game(context);
 function setupCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const scale = Math.min(window.innerWidth / 3840, window.innerHeight / 2160);
+  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   game.camera.set_scale(scale);
   game.render(performance.now()); // Force a render after setup/resize
 }
@@ -934,7 +948,6 @@ window.addEventListener("resize", () => {
   game.camera.set_scale(scale);
   game.render(performance.now()); // Force a render after resize
 });
-
 
 window.addEventListener("blur", () => {
   if (game.player.health > 0.0) {
