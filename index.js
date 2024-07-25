@@ -83,7 +83,7 @@ class Camera {
   }
 
   set_scale(x) {
-    this.pixel_factor = 1 / x; 
+    this.pixel_factor = 1 / x;
     this.context.setTransform(x, 0, 0, x, 0, 0);
   }
 
@@ -576,7 +576,7 @@ const directionMap = {
 };
 
 class Game {
-  player = new Player(new V2(0 , 0));
+  player = new Player(new V2(0, 0));
   score = 0.0;
   mousePos = new V2(0, 0);
   pressedKeys = new Set();
@@ -912,7 +912,7 @@ document.addEventListener("keydown", (event) => {
   game.keyDown(event);
 });
 
-window.addEventListener('load', setupCanvas);
+window.addEventListener("load", setupCanvas);
 
 document.addEventListener("keyup", (event) => {
   game.keyUp(event);
@@ -930,10 +930,11 @@ window.addEventListener("resize", () => {
   windowResized = true;
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const scale = Math.min(window.innerWidth / 3840, window.innerHeight / 2160);
+  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   game.camera.set_scale(scale);
   game.render(performance.now()); // Force a render after resize
 });
+
 
 window.addEventListener("blur", () => {
   if (game.player.health > 0.0) {
@@ -945,4 +946,3 @@ window.addEventListener("focus", () => {
   game.pause = false;
   startTime = performance.now() - 1000 / 60;
 });
-
