@@ -422,7 +422,7 @@ class Particles {
   }
 
   render(camera) {
-    const a = this.lifetime / PARTICLE_LIFETIME; 
+    const a = this.lifetime / PARTICLE_LIFETIME;
     camera.fillCircle(this.pos, this.radius, this.color.withAlpha(a));
   }
 }
@@ -606,12 +606,15 @@ class Game {
   }
 
   get_high_score() {
-    return parseInt(localStorage.getItem("highScore")) || 0;
+    const storedScore = localStorage.getItem("highScore");
+    return storedScore ? parseInt(storedScore, 10) : 0;
   }
 
   save_high_score() {
     if (this.score > this.high_score) {
-      localStorage.setItem("highScore", this.high_score);
+      this.high_score = this.score;
+      localStorage.setItem("highScore", this.high_score.toString());
+      console.log("New high score saved:", this.high_score); // For debugging
     }
   }
   update(dt) {
@@ -703,7 +706,7 @@ class Game {
     }
   }
 
-  renderSomething(Something) { 
+  renderSomething(Something) {
     for (let thing of Something) {
       thing.render(this.camera);
     }
@@ -740,14 +743,15 @@ class Game {
         MESSAGE_COLOR,
       );
     } else if (this.player.health <= 0.0) {
-      if (this.score < this.high_score) {
+      if (this.score >= this.high_score) {
+        this.save_high_score();
         this.camera.fillMessage4(
-          `HIGH SCORE: ${this.high_score}`,
+          `NEW HIGH SCORE: ${this.score}`,
           MESSAGE_COLOR,
         );
       } else {
         this.camera.fillMessage4(
-          `NEW HIGH SCORE: ${this.score}`,
+          `HIGH SCORE: ${this.high_score}`,
           MESSAGE_COLOR,
         );
       }
